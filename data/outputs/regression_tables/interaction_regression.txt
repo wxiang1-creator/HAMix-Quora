@@ -1,0 +1,31 @@
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:         log_engagement   R-squared:                       0.077
+Model:                            OLS   Adj. R-squared:                  0.077
+Method:                 Least Squares   F-statistic:                     196.3
+Date:                Wed, 08 Apr 2026   Prob (F-statistic):          1.64e-201
+Time:                        18:01:35   Log-Likelihood:                -22703.
+No. Observations:               11735   AIC:                         4.542e+04
+Df Residuals:                   11729   BIC:                         4.546e+04
+Df Model:                           5                                         
+Covariance Type:            nonrobust                                         
+==================================================================================
+                     coef    std err          t      P>|t|      [0.025      0.975]
+----------------------------------------------------------------------------------
+const            -14.8681     33.403     -0.445      0.656     -80.344      50.608
+ai_probability     0.8810      0.383      2.301      0.021       0.130       1.632
+score              2.7728      0.115     24.177      0.000       2.548       2.998
+interaction       -2.3243      0.561     -4.141      0.000      -3.425      -1.224
+text_len           0.0001   9.62e-06     13.520      0.000       0.000       0.000
+year               0.0071      0.017      0.428      0.669      -0.025       0.039
+==============================================================================
+Omnibus:                     3720.000   Durbin-Watson:                   0.732
+Prob(Omnibus):                  0.000   Jarque-Bera (JB):            11036.428
+Skew:                           1.665   Prob(JB):                         0.00
+Kurtosis:                       6.389   Cond. No.                     5.62e+06
+==============================================================================
+
+Notes:
+[1] Standard Errors assume that the covariance matrix of the errors is correctly specified.
+[2] The condition number is large, 5.62e+06. This might indicate that there are
+strong multicollinearity or other numerical problems.
