@@ -1,30 +1,31 @@
                             OLS Regression Results                            
 ==============================================================================
-Dep. Variable:         log_engagement   R-squared:                       0.076
-Model:                            OLS   Adj. R-squared:                  0.076
-Method:                 Least Squares   F-statistic:                     240.7
-Date:                Wed, 08 Apr 2026   Prob (F-statistic):          5.10e-199
-Time:                        18:01:35   Log-Likelihood:                -22711.
-No. Observations:               11735   AIC:                         4.543e+04
-Df Residuals:                   11730   BIC:                         4.547e+04
-Df Model:                           4                                         
-Covariance Type:            nonrobust                                         
+Dep. Variable:         log_engagement   R-squared:                       0.386
+Model:                            OLS   Adj. R-squared:                  0.386
+Method:                 Least Squares   F-statistic:                     1012.
+Date:                Thu, 28 May 2026   Prob (F-statistic):               0.00
+Time:                        23:14:40   Log-Likelihood:                -20310.
+No. Observations:               11735   AIC:                         4.063e+04
+Df Residuals:                   11729   BIC:                         4.068e+04
+Df Model:                           5                                         
+Covariance Type:                  HC3                                         
 ==================================================================================
-                     coef    std err          t      P>|t|      [0.025      0.975]
+                     coef    std err          z      P>|z|      [0.025      0.975]
 ----------------------------------------------------------------------------------
-const            -12.9928     33.423     -0.389      0.697     -78.508      52.522
-ai_probability    -0.6714      0.078     -8.618      0.000      -0.824      -0.519
-text_len           0.0001   9.63e-06     13.586      0.000       0.000       0.000
-year               0.0062      0.017      0.375      0.708      -0.026       0.039
-score              2.6196      0.109     24.115      0.000       2.407       2.833
+const           -130.8498     26.816     -4.880      0.000    -183.409     -78.291
+ai_probability    -0.2277      0.056     -4.094      0.000      -0.337      -0.119
+log_text_len      -0.4010      0.022    -18.318      0.000      -0.444      -0.358
+year               0.0657      0.013      4.963      0.000       0.040       0.092
+score              0.7702      0.097      7.915      0.000       0.579       0.961
+log_views          0.3760      0.006     58.301      0.000       0.363       0.389
 ==============================================================================
-Omnibus:                     3711.564   Durbin-Watson:                   0.730
-Prob(Omnibus):                  0.000   Jarque-Bera (JB):            10954.078
-Skew:                           1.663   Prob(JB):                         0.00
-Kurtosis:                       6.367   Cond. No.                     5.62e+06
+Omnibus:                     3652.767   Durbin-Watson:                   1.242
+Prob(Omnibus):                  0.000   Jarque-Bera (JB):            14712.237
+Skew:                           1.499   Prob(JB):                         0.00
+Kurtosis:                       7.593   Cond. No.                     4.43e+06
 ==============================================================================
 
 Notes:
-[1] Standard Errors assume that the covariance matrix of the errors is correctly specified.
-[2] The condition number is large, 5.62e+06. This might indicate that there are
+[1] Standard Errors are heteroscedasticity robust (HC3)
+[2] The condition number is large, 4.43e+06. This might indicate that there are
 strong multicollinearity or other numerical problems.

@@ -1,194 +1,151 @@
-import os
-import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
+import pandas as pd
 import statsmodels.api as sm
 from scipy.stats import ttest_ind
-import numpy as np
 
-# =========================
-# 0. Setup
-# =========================
-DATA_PATH = "quora/data/processed/merged.csv"
-OUTPUT_FIG = "quora/data/outputs/figures"
-OUTPUT_TAB = "quora/data/outputs/descriptive_tables"
+from analysis_utils import (
+    DIMENSION_COLS,
+    FIGURE_DIR,
+    PAPER_PALETTE,
+    TABLE_DIR,
+    load_merged_dataset,
+    save_figure,
+    set_paper_theme,
+)
 
-os.makedirs(OUTPUT_FIG, exist_ok=True)
-os.makedirs(OUTPUT_TAB, exist_ok=True)
 
-# =========================
-# 1. Load data（🔥 修复编码问题）
-# =========================
-def safe_read_csv(path):
-    for enc in ["utf-8", "utf-8-sig", "gbk", "latin1"]:
-        try:
-            print(f"Trying encoding: {enc}")
-            return pd.read_csv(path, encoding=enc)
-        except Exception:
-            continue
-    raise ValueError("❌ Failed to read CSV with all encodings")
+def dimension_mean_tests(df):
+    rows = []
+    analysis = df[df["is_ai"].isin([0, 1])].copy()
+    for col in DIMENSION_COLS:
+        human = analysis[analysis["is_ai"] == 0][col].dropna()
+        ai = analysis[analysis["is_ai"] == 1][col].dropna()
+        t_stat, p_value = ttest_ind(ai, human, equal_var=False, nan_policy="omit")
+        rows.append(
+            {
+                "dimension": col,
+                "n_ai": len(ai),
+                "n_human": len(human),
+                "human_mean": human.mean(),
+                "ai_mean": ai.mean(),
+                "mean_diff_ai_minus_human": ai.mean() - human.mean(),
+                "welch_t": t_stat,
+                "p_value": p_value,
+            }
+        )
+    out = pd.DataFrame(rows)
+    out.to_csv(TABLE_DIR / "dimension_ttests.csv", index=False)
+    return out
 
-df = safe_read_csv(DATA_PATH)
 
-# =========================
-# 2. Columns
-# =========================
-dimension_cols = [
-    "clarity_score",
-    "completeness_score",
-    "relevance_score",
-    "originality_score",
-    "authenticity_score"
-]
-
-missing = [c for c in dimension_cols if c not in df.columns]
-if missing:
-    raise ValueError(f"Missing dimension columns: {missing}")
-
-# 转数值
-for col in dimension_cols + ["engagement", "ai_probability", "text_len", "year"]:
-    df[col] = pd.to_numeric(df[col], errors="coerce")
-
-# 自动生成 is_ai
-if "is_ai" not in df.columns:
-    df["is_ai"] = np.where(
-        df["ai_probability"] >= 0.8, 1,
-        np.where(df["ai_probability"] <= 0.2, 0, np.nan)
+def plot_dimension_means(test_table):
+    plot_df = test_table.copy()
+    plot_df["dimension"] = (
+        plot_df["dimension"]
+        .str.replace("_score", "", regex=False)
+        .str.replace("_", " ")
+        .str.title()
     )
+    long_df = plot_df.melt(
+        id_vars="dimension",
+        value_vars=["human_mean", "ai_mean"],
+        var_name="group",
+        value_name="mean_score",
+    )
+    long_df["group"] = long_df["group"].map({"human_mean": "Human-like", "ai_mean": "AI-like"})
 
-# 只保留确定标签
-df = df.dropna(subset=["is_ai"])
+    fig, ax = plt.subplots(figsize=(7.6, 4.3))
+    dimensions = list(plot_df["dimension"])
+    x = range(len(dimensions))
+    width = 0.36
+    human = plot_df["human_mean"].to_numpy()
+    ai = plot_df["ai_mean"].to_numpy()
+    ax.bar([i - width / 2 for i in x], human, width=width, label="Human-like", color=PAPER_PALETTE["Human-like"])
+    ax.bar([i + width / 2 for i in x], ai, width=width, label="AI-like", color=PAPER_PALETTE["AI-like"])
+    ax.set_xticks(list(x))
+    ax.set_xticklabels(dimensions)
+    ax.set_xlabel("")
+    ax.set_ylabel("Mean score")
+    ax.set_title("Average Quality-Dimension Scores by Content Type")
+    ax.tick_params(axis="x", rotation=30)
+    ax.legend(title="")
+    save_figure(fig, "dimension_mean_bar")
+    plt.close(fig)
 
-# =========================
-# 3. Mean Comparison
-# =========================
-print("\n===== Dimension Mean Comparison =====")
 
-mean_table = df.groupby("is_ai")[dimension_cols].mean().T
-mean_table.columns = ["Human-like", "AI-like"]
+def plot_dimension_trends(df):
+    analysis = df[df["is_ai"].isin([0, 1])].copy()
+    for col in DIMENSION_COLS:
+        temp = (
+            analysis.groupby(["year", "ai_label"])[col]
+            .agg(mean="mean", n="size", se="sem")
+            .reset_index()
+        )
+        temp["ci"] = 1.96 * temp["se"]
 
-print(mean_table)
-mean_table.to_csv(os.path.join(OUTPUT_TAB, "dimension_mean_by_ai_human.csv"))
+        fig, ax = plt.subplots(figsize=(7.2, 4.2))
+        for label, group in temp.groupby("ai_label"):
+            ax.errorbar(
+                group["year"],
+                group["mean"],
+                yerr=group["ci"],
+                marker="o",
+                capsize=3,
+                linewidth=2,
+                label=label,
+                color=PAPER_PALETTE[label],
+            )
+        ax.axvspan(2025.65, 2026.35, color="#E5E7EB", alpha=0.45)
+        ax.set_title(f"{col.replace('_score', '').replace('_', ' ').title()} Over Time")
+        ax.set_xlabel("Year")
+        ax.set_ylabel("Mean score")
+        ax.legend()
+        save_figure(fig, f"{col}_over_time")
+        plt.close(fig)
 
-# Plot
-mean_table.plot(kind="bar", figsize=(10,6))
-plt.title("Average Dimension Scores by Content Type")
-plt.ylabel("Average Score")
-plt.xticks(rotation=45)
-plt.tight_layout()
-plt.savefig(os.path.join(OUTPUT_FIG, "dimension_mean_bar.png"))
-plt.show()
 
-# =========================
-# 4. T-tests
-# =========================
-print("\n===== T-tests for Each Dimension =====")
+def multivariate_dimension_regression(df):
+    cols = ["log_engagement", "ai_probability", "log_text_len", "year", "score"] + DIMENSION_COLS
+    if "log_views" in df.columns:
+        cols.append("log_views")
+    reg = df[cols].dropna().copy()
 
-ttest_results = []
+    x_cols = ["ai_probability", "log_text_len", "year"] + DIMENSION_COLS
+    if "log_views" in reg.columns:
+        x_cols.append("log_views")
 
-for col in dimension_cols:
-    human = df[df["is_ai"] == 0][col].dropna()
-    ai = df[df["is_ai"] == 1][col].dropna()
+    model = sm.OLS(reg["log_engagement"], sm.add_constant(reg[x_cols])).fit(cov_type="HC3")
+    rows = []
+    for term in x_cols:
+        rows.append(
+            {
+                "term": term,
+                "coef": model.params[term],
+                "std_err": model.bse[term],
+                "p_value": model.pvalues[term],
+                "n": int(model.nobs),
+                "adj_r_squared": model.rsquared_adj,
+            }
+        )
+    out = pd.DataFrame(rows)
+    out.to_csv(TABLE_DIR / "dimension_multivariate_regression.csv", index=False)
 
-    if len(human) > 5 and len(ai) > 5:
-        t_stat, p_value = ttest_ind(ai, human, equal_var=False)
-    else:
-        t_stat, p_value = np.nan, np.nan
+    with open(TABLE_DIR / "dimension_multivariate_regression.txt", "w", encoding="utf-8") as f:
+        f.write(model.summary().as_text())
+    return out
 
-    ttest_results.append({
-        "dimension": col,
-        "human_mean": human.mean(),
-        "ai_mean": ai.mean(),
-        "t_stat": t_stat,
-        "p_value": p_value
-    })
 
-ttest_df = pd.DataFrame(ttest_results)
-print(ttest_df)
-ttest_df.to_csv(os.path.join(OUTPUT_TAB, "dimension_ttests.csv"), index=False)
+def main():
+    set_paper_theme()
+    df = load_merged_dataset()
+    test_table = dimension_mean_tests(df)
+    plot_dimension_means(test_table)
+    plot_dimension_trends(df)
+    reg_table = multivariate_dimension_regression(df)
+    print("Saved dimension tests and figures to:", TABLE_DIR, FIGURE_DIR)
+    print(test_table)
+    print(reg_table)
 
-# =========================
-# 5. Trends Over Time
-# =========================
-print("\n===== Dimension Trends Over Time =====")
 
-for col in dimension_cols:
-    temp = df.groupby(["year", "is_ai"])[col].mean().reset_index()
-
-    plt.figure(figsize=(8,5))
-    for name, group in temp.groupby("is_ai"):
-        label = "AI-like" if name == 1 else "Human-like"
-        plt.plot(group["year"], group[col], marker="o", label=label)
-
-    plt.title(f"{col} Over Time")
-    plt.xlabel("Year")
-    plt.ylabel("Average Score")
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(os.path.join(OUTPUT_FIG, f"{col}_over_time.png"))
-    plt.show()
-
-# =========================
-# 6. Dimension vs Engagement
-# =========================
-print("\n===== Dimension vs Engagement Regression =====")
-
-corr_results = []
-
-for col in dimension_cols:
-    temp = df[[col, "engagement"]].dropna()
-
-    if len(temp) < 10:
-        continue
-
-    X = sm.add_constant(temp[col])
-    y = temp["engagement"]
-
-    model = sm.OLS(y, X).fit()
-
-    corr_results.append({
-        "dimension": col,
-        "coef": model.params[col],
-        "p_value": model.pvalues[col],
-        "r_squared": model.rsquared
-    })
-
-corr_df = pd.DataFrame(corr_results)
-print(corr_df)
-corr_df.to_csv(os.path.join(OUTPUT_TAB, "dimension_vs_engagement_regression.csv"), index=False)
-
-# =========================
-# 7. Multivariate Regression
-# =========================
-print("\n===== Separate Regressions for Each Dimension =====")
-
-df["log_engagement"] = np.log1p(df["engagement"])
-
-multi_results = []
-
-for col in dimension_cols:
-    temp = df[[col, "ai_probability", "text_len", "year", "log_engagement"]].dropna()
-
-    if len(temp) < 10:
-        continue
-
-    X = temp[[col, "ai_probability", "text_len", "year"]]
-    X = sm.add_constant(X)
-    y = temp["log_engagement"]
-
-    model = sm.OLS(y, X).fit()
-
-    multi_results.append({
-        "dimension": col,
-        "coef": model.params[col],
-        "std_err": model.bse[col],
-        "p_value": model.pvalues[col],
-        "r_squared": model.rsquared
-    })
-
-multi_df = pd.DataFrame(multi_results)
-print(multi_df)
-multi_df.to_csv(os.path.join(OUTPUT_TAB, "dimension_multivariate_regression.csv"), index=False)
-
-print("\n✅ Dimension analysis completed successfully.")
+if __name__ == "__main__":
+    main()

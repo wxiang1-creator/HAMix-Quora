@@ -1,245 +1,208 @@
 import os
-import pandas as pd
+
 import matplotlib.pyplot as plt
-import seaborn as sns
+import numpy as np
+import pandas as pd
 import statsmodels.api as sm
 from scipy.stats import ttest_ind
-import numpy as np
 
-# =========================
-# 0. Setup
-# =========================
-
-# 以当前脚本所在位置为基准，避免路径混乱
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(BASE_DIR)
-
-DATA_PATH = os.path.join(PROJECT_ROOT, "data", "processed", "merged.csv")
-OUTPUT_FIG = os.path.join(PROJECT_ROOT, "data", "outputs", "figures")
-OUTPUT_TAB = os.path.join(PROJECT_ROOT, "data", "outputs", "regression_tables")
-OUTPUT_PROCESSED = os.path.join(PROJECT_ROOT, "data", "processed")
-
-os.makedirs(OUTPUT_FIG, exist_ok=True)
-os.makedirs(OUTPUT_TAB, exist_ok=True)
-os.makedirs(OUTPUT_PROCESSED, exist_ok=True)
-
-# =========================
-# 1. Load data
-# =========================
-print("Loading data from:", DATA_PATH)
-
-try:
-    df = pd.read_csv(DATA_PATH, encoding="utf-8-sig")
-except:
-    try:
-        df = pd.read_csv(DATA_PATH, encoding="gbk")
-    except:
-        df = pd.read_csv(DATA_PATH, encoding="latin1")
-
-print("Data loaded successfully.")
-print("Shape:", df.shape)
-
-# 如果还没有总分，就自动生成
-dimension_cols = [
-    "clarity_score",
-    "completeness_score",
-    "relevance_score",
-    "originality_score",
-    "authenticity_score"
-]
-
-if "score" not in df.columns and all(col in df.columns for col in dimension_cols):
-    df["score"] = df[dimension_cols].mean(axis=1)
-
-# 基础变量处理
-for col in ["engagement", "ai_probability", "text_len", "year", "score"]:
-    if col in df.columns:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
-
-# 自动生成 is_ai
-if "is_ai" not in df.columns:
-    df["is_ai"] = np.where(
-        df["ai_probability"] >= 0.8, 1,
-        np.where(df["ai_probability"] <= 0.2, 0, np.nan)
-    )
-
-df["log_engagement"] = np.log1p(df["engagement"])
-
-# 保存一个最终干净分析版
-analysis_cols = [
-    "question_title", "answer_text", "engagement", "log_engagement",
-    "ai_probability", "is_ai", "year", "text_len", "score"
-] + [c for c in dimension_cols if c in df.columns]
-
-analysis_cols = [c for c in analysis_cols if c in df.columns]
-
-analysis_df = df[analysis_cols].copy()
-analysis_df.to_csv(
-    os.path.join(OUTPUT_PROCESSED, "final_analysis_dataset.csv"),
-    index=False,
-    encoding="utf-8-sig"
+from analysis_utils import (
+    DIMENSION_COLS,
+    FIGURE_DIR,
+    PROCESSED_DIR,
+    REGRESSION_DIR,
+    load_merged_dataset,
+    set_paper_theme,
 )
 
-print("Final analysis dataset saved.")
 
-# =========================
-# 2. Engagement vs Score
-# =========================
-print("\n===== Engagement vs Score =====")
-df_clean = df[['engagement', 'score']].dropna()
+OUTPUT_FIG = str(FIGURE_DIR)
+OUTPUT_TAB = str(REGRESSION_DIR)
+OUTPUT_PROCESSED = str(PROCESSED_DIR)
 
-X = sm.add_constant(df_clean['score'])
-Y = df_clean['engagement']
-model = sm.OLS(Y, X).fit()
-print(model.summary())
 
-with open(os.path.join(OUTPUT_TAB, "engagement_vs_score.txt"), "w", encoding="utf-8") as f:
-    f.write(model.summary().as_text())
+def save_current_figure(stem):
+    plt.tight_layout()
+    plt.savefig(os.path.join(OUTPUT_FIG, f"{stem}.png"), dpi=300, bbox_inches="tight")
+    plt.savefig(os.path.join(OUTPUT_FIG, f"{stem}.pdf"), bbox_inches="tight")
 
-# =========================
-# 3. Score by Year and AI/Human
-# =========================
-print("\n===== Score by Year and AI/Human =====")
-df_clean = df[['is_ai', 'score', 'year']].dropna()
 
-df_mean = df_clean.groupby(['is_ai','year'])['score'].mean().reset_index()
-print(df_mean)
+def save_summary(model, filename):
+    with open(os.path.join(OUTPUT_TAB, filename), "w", encoding="utf-8") as f:
+        f.write(model.summary().as_text())
 
-plt.figure(figsize=(8,5))
-for name, group in df_mean.groupby('is_ai'):
-    label = "AI-like" if name == 1 else "Human-like"
-    plt.plot(group['year'], group['score'], marker='o', label=label)
 
-plt.xlabel('Year')
-plt.ylabel('Average Score')
-plt.title('Average Score by Year')
-plt.legend()
-plt.grid(True)
-plt.tight_layout()
-plt.savefig(os.path.join(OUTPUT_FIG, "score_by_year_ai_human.png"))
-plt.show()
+def main():
+    set_paper_theme()
+    print("Loading merged analysis dataset")
+    df = load_merged_dataset()
+    print("Shape:", df.shape)
 
-# =========================
-# 4. Text Length vs Score
-# =========================
-print("\n===== Text Length vs Score =====")
-df_clean = df[['text_len', 'score']].dropna()
+    dimension_cols = [c for c in DIMENSION_COLS if c in df.columns]
 
-X = sm.add_constant(df_clean['text_len'])
-Y = df_clean['score']
-model = sm.OLS(Y, X).fit()
-print(model.summary())
+    analysis_cols = [
+        "url",
+        "question_title",
+        "answer_text",
+        "author",
+        "engagement",
+        "log_engagement",
+        "upvotes",
+        "comments",
+        "shares",
+        "views",
+        "log_views",
+        "ai_probability",
+        "is_ai",
+        "ai_label",
+        "year",
+        "text_len",
+        "log_text_len",
+        "score",
+    ] + dimension_cols
+    analysis_cols = [c for c in analysis_cols if c in df.columns]
+    df[analysis_cols].to_csv(
+        os.path.join(OUTPUT_PROCESSED, "final_analysis_dataset.csv"),
+        index=False,
+        encoding="utf-8-sig",
+    )
+    print("Final analysis dataset saved.")
 
-with open(os.path.join(OUTPUT_TAB, "text_length_vs_score.txt"), "w", encoding="utf-8") as f:
-    f.write(model.summary().as_text())
+    print("\n===== Engagement vs Score =====")
+    score_df = df[["engagement", "score"]].dropna()
+    model = sm.OLS(score_df["engagement"], sm.add_constant(score_df["score"])).fit(cov_type="HC3")
+    print(model.summary())
+    save_summary(model, "engagement_vs_score.txt")
 
-# =========================
-# 5. AI vs Human Score Distribution
-# =========================
-print("\n===== AI vs Human Score Comparison =====")
-df_clean = df[['score','is_ai']].dropna()
+    print("\n===== Score by Year and AI/Human =====")
+    yearly_score = df[df["is_ai"].isin([0, 1])][["is_ai", "score", "year"]].dropna()
+    yearly_mean = yearly_score.groupby(["is_ai", "year"])["score"].mean().reset_index()
+    yearly_mean.to_csv(os.path.join(OUTPUT_TAB, "score_by_year_ai_human.csv"), index=False)
 
-plt.figure(figsize=(8,5))
-sns.violinplot(x='is_ai', y='score', data=df_clean, inner='box')
-plt.xticks([0, 1], ['Human-like', 'AI-like'])
-plt.xlabel('Content Type')
-plt.ylabel('Score')
-plt.title('Score Distribution: AI-like vs Human-like')
-plt.tight_layout()
-plt.savefig(os.path.join(OUTPUT_FIG, "score_distribution_violin.png"))
-plt.show()
+    plt.figure(figsize=(7.2, 4.2))
+    for name, group in yearly_mean.groupby("is_ai"):
+        label = "AI-like" if name == 1 else "Human-like"
+        plt.plot(group["year"], group["score"], marker="o", label=label)
+    plt.xlabel("Year")
+    plt.ylabel("Average quality score")
+    plt.title("Average Quality Score by Year")
+    plt.legend()
+    save_current_figure("score_by_year_ai_human")
+    plt.close()
 
-human_scores = df_clean[df_clean['is_ai']==0]['score']
-ai_scores = df_clean[df_clean['is_ai']==1]['score']
+    print("\n===== Text Length vs Score =====")
+    length_score = df[["log_text_len", "score"]].dropna()
+    model = sm.OLS(length_score["score"], sm.add_constant(length_score["log_text_len"])).fit(cov_type="HC3")
+    print(model.summary())
+    save_summary(model, "text_length_vs_score.txt")
 
-t_stat, p_value = ttest_ind(ai_scores, human_scores, nan_policy='omit')
-print(f"t = {t_stat:.3f}, p = {p_value:.5f}")
+    print("\n===== AI vs Human Score Comparison =====")
+    score_compare = df[df["is_ai"].isin([0, 1])][["score", "is_ai"]].dropna()
+    plt.figure(figsize=(7.2, 4.2))
+    score_groups = [
+        score_compare[score_compare["is_ai"] == 0]["score"].dropna(),
+        score_compare[score_compare["is_ai"] == 1]["score"].dropna(),
+    ]
+    plt.boxplot(score_groups, tick_labels=["Human-like", "AI-like"], showfliers=False, patch_artist=True)
+    plt.xlabel("Content type")
+    plt.ylabel("Quality score")
+    plt.title("Quality Score Distribution")
+    save_current_figure("score_distribution_violin")
+    plt.close()
 
-# =========================
-# 6. Main Regression
-# =========================
-print("\n===== Main Regression =====")
-df_clean = df[['engagement', 'ai_probability', 'score', 'text_len', 'year']].dropna()
+    human_scores = score_compare[score_compare["is_ai"] == 0]["score"]
+    ai_scores = score_compare[score_compare["is_ai"] == 1]["score"]
+    t_stat, p_value = ttest_ind(ai_scores, human_scores, equal_var=False, nan_policy="omit")
+    pd.DataFrame(
+        [
+            {
+                "n_ai": len(ai_scores),
+                "n_human": len(human_scores),
+                "ai_mean": ai_scores.mean(),
+                "human_mean": human_scores.mean(),
+                "welch_t": t_stat,
+                "p_value": p_value,
+            }
+        ]
+    ).to_csv(os.path.join(OUTPUT_TAB, "score_group_ttest.csv"), index=False)
+    print(f"Welch t = {t_stat:.3f}, p = {p_value:.5f}")
 
-reg_df = df_clean.copy()
-reg_df["log_engagement"] = np.log1p(reg_df["engagement"])
+    print("\n===== Main Regression =====")
+    reg_cols = ["log_engagement", "ai_probability", "score", "log_text_len", "year"]
+    if "log_views" in df.columns:
+        reg_cols.append("log_views")
+    reg_df = df[reg_cols].dropna().copy()
 
-X = reg_df[["ai_probability", "text_len", "year", "score"]]
-X = sm.add_constant(X)
-y = reg_df["log_engagement"]
+    x_cols = ["ai_probability", "log_text_len", "year", "score"]
+    if "log_views" in reg_df.columns:
+        x_cols.append("log_views")
+    model_main = sm.OLS(reg_df["log_engagement"], sm.add_constant(reg_df[x_cols])).fit(cov_type="HC3")
+    print(model_main.summary())
+    save_summary(model_main, "main_regression.txt")
 
-model_main = sm.OLS(y, X).fit()
-print(model_main.summary())
+    print("\n===== Interaction Regression =====")
+    reg_df["interaction"] = reg_df["ai_probability"] * reg_df["score"]
+    x_cols_interaction = ["ai_probability", "score", "interaction", "log_text_len", "year"]
+    if "log_views" in reg_df.columns:
+        x_cols_interaction.append("log_views")
+    model_interaction = sm.OLS(
+        reg_df["log_engagement"],
+        sm.add_constant(reg_df[x_cols_interaction]),
+    ).fit(cov_type="HC3")
+    print(model_interaction.summary())
+    save_summary(model_interaction, "interaction_regression.txt")
 
-with open(os.path.join(OUTPUT_TAB, "main_regression.txt"), "w", encoding="utf-8") as f:
-    f.write(model_main.summary().as_text())
+    print("\n===== Quality Bin Analysis =====")
+    bin_df = df[df["is_ai"].isin([0, 1])][["engagement", "log_engagement", "score", "is_ai"]].dropna().copy()
+    bin_df["quality_bin"] = pd.qcut(bin_df["score"], 5, duplicates="drop")
+    quality_summary = (
+        bin_df.groupby(["quality_bin", "is_ai"], observed=True)
+        .agg(n=("engagement", "size"), mean_engagement=("engagement", "mean"))
+        .reset_index()
+    )
+    quality_summary.to_csv(os.path.join(OUTPUT_TAB, "engagement_by_quality_bin_summary.csv"), index=False)
 
-# =========================
-# 7. Interaction Model
-# =========================
-print("\n===== Interaction Regression =====")
-reg_df["interaction"] = reg_df["ai_probability"] * reg_df["score"]
+    plot_data = quality_summary.copy()
+    plot_data["bin_order"] = plot_data.groupby("is_ai").cumcount()
+    plt.figure(figsize=(7.2, 4.2))
+    for is_ai, group in plot_data.groupby("is_ai"):
+        label = "AI-like" if is_ai == 1 else "Human-like"
+        plt.plot(group["bin_order"], group["mean_engagement"], marker="o", label=label)
+        for _, row in group.iterrows():
+            plt.text(row["bin_order"], row["mean_engagement"], f"n={int(row['n'])}", fontsize=7, ha="center")
+    plt.xticks(sorted(plot_data["bin_order"].unique()), [f"Q{i + 1}" for i in sorted(plot_data["bin_order"].unique())])
+    plt.xlabel("Quality quintile")
+    plt.ylabel("Average engagement")
+    plt.title("Engagement by Quality Level and Content Type")
+    plt.legend()
+    save_current_figure("engagement_by_quality_bin")
+    plt.close()
 
-X = reg_df[["ai_probability", "score", "interaction", "text_len", "year"]]
-X = sm.add_constant(X)
-y = reg_df["log_engagement"]
+    print("\n===== Engagement vs Score Scatter =====")
+    plt.figure(figsize=(7.2, 4.2))
+    plt.scatter(reg_df["score"], reg_df["log_engagement"], alpha=0.25, s=12, edgecolors="none")
+    plt.xlabel("Quality score")
+    plt.ylabel("log(1 + engagement)")
+    plt.title("Engagement vs Quality Score")
+    save_current_figure("engagement_vs_score_scatter")
+    plt.close()
 
-model_interaction = sm.OLS(y, X).fit()
-print(model_interaction.summary())
+    print("\n===== Engagement Distribution by AI/Human =====")
+    eng_df = df[df["is_ai"].isin([0, 1])][["log_engagement", "is_ai"]].dropna()
+    plt.figure(figsize=(7.2, 4.2))
+    engagement_groups = [
+        eng_df[eng_df["is_ai"] == 0]["log_engagement"].dropna(),
+        eng_df[eng_df["is_ai"] == 1]["log_engagement"].dropna(),
+    ]
+    plt.boxplot(engagement_groups, tick_labels=["Human-like", "AI-like"], showfliers=False, patch_artist=True)
+    plt.xlabel("Content type")
+    plt.ylabel("log(1 + engagement)")
+    plt.title("Engagement Distribution")
+    save_current_figure("engagement_distribution_violin")
+    plt.close()
 
-with open(os.path.join(OUTPUT_TAB, "interaction_regression.txt"), "w", encoding="utf-8") as f:
-    f.write(model_interaction.summary().as_text())
+    print("\nMain analysis completed successfully.")
 
-# =========================
-# 8. Quality Bin Analysis
-# =========================
-print("\n===== Quality Bin Analysis =====")
-df_bin = df[['engagement', 'score', 'is_ai']].dropna().copy()
-df_bin["quality_bin"] = pd.qcut(df_bin["score"], 5, duplicates="drop")
 
-df2 = df_bin.groupby(["quality_bin", "is_ai"])["engagement"].mean().unstack()
-
-df2.plot(marker='o', figsize=(8,5))
-plt.xlabel('Quality Bin')
-plt.ylabel('Average Engagement')
-plt.title('Engagement by Quality Level and Content Type')
-plt.legend(["Human-like", "AI-like"])
-plt.xticks(rotation=45)
-plt.grid(True)
-plt.tight_layout()
-plt.savefig(os.path.join(OUTPUT_FIG, "engagement_by_quality_bin.png"))
-plt.show()
-
-# Engagement vs Score Scatter
-plt.figure(figsize=(8,5))
-sns.scatterplot(data=df_clean, x='score', y='engagement', alpha=0.4)
-plt.xlabel('Score')
-plt.ylabel('Engagement')
-plt.title('Engagement vs Score')
-plt.tight_layout()
-plt.savefig(os.path.join(OUTPUT_FIG, "engagement_vs_score_scatter.png"))
-plt.show()
-
-# Engagement vs Score Scatter
-plt.figure(figsize=(8,5))
-sns.scatterplot(data=df_clean, x='score', y='engagement', alpha=0.4)
-plt.xlabel('Score')
-plt.ylabel('Engagement')
-plt.title('Engagement vs Score')
-plt.tight_layout()
-plt.savefig(os.path.join(OUTPUT_FIG, "engagement_vs_score_scatter.png"))
-plt.show()
-
-# Engagement Distribution by AI/Human
-df_eng = df[['engagement','is_ai']].dropna()
-
-plt.figure(figsize=(8,5))
-sns.violinplot(x='is_ai', y='engagement', data=df_eng, inner='box')
-plt.xticks([0, 1], ['Human-like', 'AI-like'])
-plt.xlabel('Content Type')
-plt.ylabel('Engagement')
-plt.title('Engagement Distribution: AI-like vs Human-like')
-plt.tight_layout()
-plt.savefig(os.path.join(OUTPUT_FIG, "engagement_distribution_violin.png"))
-plt.show()
-print("\nMain analysis completed successfully.")
+if __name__ == "__main__":
+    main()

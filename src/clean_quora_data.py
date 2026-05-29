@@ -19,7 +19,10 @@ print("去重后行数:", len(df))
 
 
 # ========= 3. 时间处理（3y → 年份） =========
-CURRENT_DATE = datetime.now()
+# Keep relative Quora timestamps reproducible. Update this only when rebuilding
+# the dataset from a new crawl.
+COLLECTION_DATE = "2026-05-28"
+CURRENT_DATE = datetime.strptime(COLLECTION_DATE, "%Y-%m-%d")
 CURRENT_YEAR = CURRENT_DATE.year
 CURRENT_MONTH = CURRENT_DATE.month
 CURRENT_DAY = CURRENT_DATE.day

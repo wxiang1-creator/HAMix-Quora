@@ -2,18 +2,18 @@
 ==============================================================================
 Dep. Variable:             engagement   R-squared:                       0.001
 Model:                            OLS   Adj. R-squared:                  0.001
-Method:                 Least Squares   F-statistic:                     17.45
-Date:                Wed, 08 Apr 2026   Prob (F-statistic):           2.97e-05
-Time:                        18:01:23   Log-Likelihood:            -1.0236e+05
+Method:                 Least Squares   F-statistic:                     16.46
+Date:                Thu, 28 May 2026   Prob (F-statistic):           5.00e-05
+Time:                        23:14:39   Log-Likelihood:            -1.0236e+05
 No. Observations:               11746   AIC:                         2.047e+05
 Df Residuals:                   11744   BIC:                         2.047e+05
 Df Model:                           1                                         
-Covariance Type:            nonrobust                                         
+Covariance Type:                  HC3                                         
 ==============================================================================
-                 coef    std err          t      P>|t|      [0.025      0.975]
+                 coef    std err          z      P>|z|      [0.025      0.975]
 ------------------------------------------------------------------------------
-const       -144.8980     61.610     -2.352      0.019    -265.664     -24.132
-score        387.7076     92.804      4.178      0.000     205.796     569.619
+const       -144.8980     54.199     -2.673      0.008    -251.127     -38.669
+score        387.7076     95.565      4.057      0.000     200.404     575.011
 ==============================================================================
 Omnibus:                    36472.555   Durbin-Watson:                   1.836
 Prob(Omnibus):                  0.000   Jarque-Bera (JB):       4595406399.494
@@ -22,4 +22,4 @@ Kurtosis:                    3065.735   Cond. No.                         9.73
 ==============================================================================
 
 Notes:
-[1] Standard Errors assume that the covariance matrix of the errors is correctly specified.
+[1] Standard Errors are heteroscedasticity robust (HC3)
